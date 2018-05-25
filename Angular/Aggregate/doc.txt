@@ -1,0 +1,7 @@
+to start the examples:
+- open /Angular folder in command line
+- run: http-server (this is module of nodejs)
+- navigate the browser to http://localhost:8080/aggregate/
+- use Ctrl+F5 to fully reload the page
+
+
