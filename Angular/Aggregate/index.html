@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Aggregate the numbers</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body ng-app="aggr">
+    <div class="container" ng-controller="AggregateCtrl">
+        <h2>Aggregate the numbers</h2>
+        <p class="well lead">Count: {{getCount()}}.</p>
+        <label>Numbers: </label>
+        <ul>
+            <li ng-repeat="n in numbers">{{n}}</li>
+        </ul>
+        <p class="well lead">Sum: {{getSum()}}.</p>
+        <input type="number" ng-model="num" />
+        <button ng-click="addNumber()" class="btn btn-primary btn-sm">Add</button>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.10/angular.min.js"></script>
+    <script src="scripts/aggregate.js"></script>
+</body>
+
+</html>
