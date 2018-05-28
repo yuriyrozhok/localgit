@@ -10,6 +10,9 @@
     <div class="container" ng-controller="AggregateCtrl">
         <h2>Aggregate the numbers</h2>
         <p class="well lead">Count: {{getCount()}}.</p>
+        <p class="text-info">Current number:
+            <span class="badge badge-primary">{{num}}</span>
+        </p>        
         <label>Numbers: </label>
         <ul>
             <li ng-repeat="n in numbers">{{n}}</li>
