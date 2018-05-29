@@ -17,6 +17,8 @@ node server
 
 this routes to home page: http://localhost:8080
 this routes to api/data: http://localhost:8080/api/data
+
+api returns SQL results in JSON
 */
 
 var express = require('express');
