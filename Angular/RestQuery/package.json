@@ -1,0 +1,10 @@
+{
+    "name": "RestQuery",
+    "version": "1.0.0",
+    "description": "RESTFul API connecting to Teradata database",
+    "author": "yuriyrozhok",
+    "license": "ISC",
+    "dependencies": {
+    },
+    "main": "server.js"
+  }
