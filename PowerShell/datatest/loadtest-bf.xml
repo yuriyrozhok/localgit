@@ -1,0 +1,34 @@
+<suite>
+	<config>
+		<source connection="Data Source=asazure://westeurope.asazure.windows.net/msbissas;Catalog=DYI;User ID=yuriy.rozhok@maersk.com;EffectiveUserName=Hengyuan.Lin@maersk.com"/>
+		<export enabled="true" path=".\export"/>
+		<compare precision="0.01"/>
+	</config>
+	<tests>
+		<test>
+			<id>1</id>
+			<enabled>true</enabled>
+			<query>evaluate values('Location'[LOC])</query>
+		</test>
+		<test>
+			<id>2</id>
+			<enabled>true</enabled>
+			<query>evaluate summarize('Location', 'Location'[LOC], "USD", YieldResults[Amount USD]) order by 'Location'[LOC]</query>
+		</test>
+		<test>
+			<id>3</id>
+			<enabled>true</enabled>
+			<query>evaluate summarize(YieldResults, 'Time Depart Period'[MonthYYYYMM_NN], "USD", YieldResults[Amount USD]) order by 'Time Depart Period'[MonthYYYYMM_NN]</query>
+		</test>
+		<test>
+			<id>4</id>
+			<enabled>true</enabled>
+			<query>evaluate summarize('Location LOAD', 'Location LOAD'[Cluster Loaded], "USD", YieldResults[Amount USD]) order by [Cluster Loaded]</query>
+		</test>
+		<test>
+			<id>5</id>
+			<enabled>true</enabled>
+			<query>evaluate summarize('Equipment', Equipment[Equipment SubSize], "USD", YieldResults[Amount USD]) order by [Equipment SubSize]</query>
+		</test>
+	</tests>
+</suite>

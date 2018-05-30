@@ -1,0 +1,21 @@
+<suite>
+	<config>
+		<test type="reco"/>
+		<source platform="Teradata" connection="Data Source=maersk6;Database=DTST16_APPL_MSBIPNL;User Id=UTST16_FBR_MSBI_USER;Password=Welcome@2017;Connection Timeout=300;"/>
+		<target platform="Teradata" connection="Data Source=maersk6;Database=DPRD_APPL_MSBIPNL;User Id=UPRD_FBR_MSBI_USER;Password=Maersk2#4r5;Connection Timeout=300;"/>
+		<export enabled="true" path=".\export"/>
+		<compare precision="0.01"/>
+	</config>
+	<tests>
+		<test>
+			<id>1</id>
+			<enabled>true</enabled>
+			<query>SELECT COUNT(*) FROM PnL_DimEquipment</query>
+		</test>
+		<test>
+			<id>2</id>
+			<enabled>true</enabled>
+			<query>SELECT COUNT(*) FROM PnL_DimShipment_B</query>
+		</test>
+	</tests>
+</suite>

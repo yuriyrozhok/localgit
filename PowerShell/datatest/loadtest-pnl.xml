@@ -1,0 +1,25 @@
+<suite>
+	<config>
+		<test type="load"/>	
+		<source platform="SSAS" connection="Data Source=SCRBMSBDKBAL220\PRODQUERYSERVER1;Catalog=FBR_ProfitAndLoss"/>
+		<export enabled="true" path=".\export"/>
+		<compare precision="0.01"/>
+	</config>
+	<tests>
+		<test>
+			<id>1</id>
+			<enabled>true</enabled>
+			<query>select {[Measures].[Amount USD ShpLvL],[Measures].[FFE Discharged],[Measures].[FFE Loaded]} on 0 from [PnL Cube]</query>
+		</test>
+		<test>
+			<id>2</id>
+			<enabled>true</enabled>
+			<query>select {[Measures].[Amount USD ShpLvL],[Measures].[FFE Discharged],[Measures].[FFE Loaded]} on 0, [Time Accounting period].[Unique Month].Children on 1 from [PnL Cube]</query>
+		</test>
+		<test>
+			<id>3</id>
+			<enabled>true</enabled>
+			<query>select {[Measures].[Amount USD ShpLvL],[Measures].[FFE Discharged],[Measures].[FFE Loaded]} on 0, non empty [String].[String].Children on 1 from [PnL Cube]</query>
+		</test>		
+	</tests>
+</suite>

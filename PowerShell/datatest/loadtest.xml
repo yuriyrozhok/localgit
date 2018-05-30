@@ -1,0 +1,14 @@
+<suite>
+	<config>
+		<source connection="Data Source=asazure://westeurope.asazure.windows.net/msbissas;Catalog=DYI;User ID=yuriy.rozhok@maersk.com"/>
+		<export enabled="true" path=".\export"/>
+		<compare precision="0.01"/>
+	</config>
+	<tests>
+		<test>
+			<id>1</id>
+			<enabled>true</enabled>
+			<query>evaluate values('Location'[LOC])</query>
+		</test>
+	</tests>
+</suite>

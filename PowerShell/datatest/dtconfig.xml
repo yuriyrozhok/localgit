@@ -1,0 +1,16 @@
+<suite>
+	<config>
+		<test type="reco"/>
+		<source connection="Data Source=SCRBMSBDKBAL220\PRODQUERYSERVER1;Catalog=FBR_ProfitAndLoss"/>
+		<target connection="Data Source=SCRBMSBDK000661\PROCESS2012SRV1;Catalog=FBR_ProfitAndLoss"/>
+		<export enabled="true" path=".\export"/>
+		<compare precision="0.01"/>
+	</config>
+	<tests>
+		<test>
+			<id>1</id>
+			<enabled>true</enabled>
+			<query>select {[Measures].[Amount USD ShpLvL],[Measures].[FFE Discharged],[Measures].[FFE Loaded]} on 0 from [PnL Cube]</query>
+		</test>
+	</tests>
+</suite>
