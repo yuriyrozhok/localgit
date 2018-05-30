@@ -19,6 +19,10 @@ this routes to home page: http://localhost:8080
 this routes to api/data: http://localhost:8080/api/data
 
 api returns SQL results in JSON
+https://spring.io/guides/gs/consuming-rest-angularjs/
+https://www.mongodb.com/blog/post/the-modern-application-stack-part-3-building-a-rest-api-using-expressjs
+https://www.sitepoint.com/creating-restful-apis-express-4/
+https://www.angularcode.com/creating-rest-api-using-nodejs-and-consuming-in-angularjs/
 */
 
 var express = require('express');
