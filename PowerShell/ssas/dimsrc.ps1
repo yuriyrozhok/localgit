@@ -4,40 +4,18 @@
 # Author:			YRO016
 # Description:		Reads the source views/tables/columns for the cube dimensions.
 # ---------------------------------------------------------------------------------------
+param (
+    [string]$server = "SCRBMSBDK000660",
+    [string]$database = "FBR_FYPnL_DPRD",
+    [string]$outfile = ".\result.json"
+)
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null;
 
-[string]$srv_name = "SCRBMSBDK000660"
-[string]$db_name = "FBR_FYPnL_DPRD"
-[string]$cube_name = "FYPnL Cube"
-
-$server = New-Object Microsoft.AnalysisServices.Server
-write-host ("::: connecting to SSAS instance: {0} ..." -f $srv_name)
-$server.connect($srv_name)
-$db = $server.Databases.FindByName($db_name)
+$srv = New-Object Microsoft.AnalysisServices.Server
+write-host ("::: connecting to SSAS instance: {0} ..." -f $server)
+$srv.connect($server)
+$db = $srv.Databases.FindByName($database)
 write-host("::: database: [{0}]" -f $db.Name)
-$cube = $db.Cubes.FindByName($cube_name)
-write-host("::: state of the cube [{0}]: {1}" -f $cube.Name, $cube.State)
-write-host("::: dimensions:")
-#foreach ($cubedim in $cube.Dimensions) 
-$cubedim = $cube.Dimensions[0]
-
-$dbdim = $cubedim.Dimension
-write-host("[{0}] -> [{1}], visible: {2}" -f $cubedim.Name, $dbdim.Name, $(if ($cubedim.Visible) {"Yes"} else {"No"}))
-<#
-	foreach ($cubeattr in $cubedim.Attributes) {
-		$attr = $cubeattr.Attribute
-		write-host("[{0}], name col: [{1}]" -f $attr.Name, $attr.NameColumn)
-	}
-	#>
-$attr = $dbdim.Attributes[0]
-write-host("[{0}], name col: [{1}]" -f $attr.Name, $attr.NameColumn)
-
-#$tb = $attr.Source
-[Microsoft.AnalysisServices.ColumnBinding]$cb = $attr.NameColumn.Source;
-write-host("Column ID [{0}], Table ID: [{1}]" -f $cb.ColumnID, $cb.TableID)
-
-[System.Data.DataSet]$schema = $dbdim.DataSourceView.Schema
-#[System.Data.DataTable]$dt = $schema.Tables[$cb.TableID]
 
 function GetDimensionAttributeInfo {
     param (
@@ -78,32 +56,18 @@ function GetDatabaseDimensionAttributes {
     return $attributes
 }
 
-function AnalysisStateToString {
-    param (
-        [Parameter(Mandatory = $true)] $state
-	)	
-	switch($state) {
-		[Microsoft.AnalysisServices.AnalysisState].Unprocessed {$statestr = "Unprocessed"}
-		[Microsoft.AnalysisServices.AnalysisState].Processed {$statestr = "Processed"}
-		[Microsoft.AnalysisServices.AnalysisState].PartiallyProcessed {$statestr = "PartiallyProcessed"}
-		default {$statestr = "Unknown"}
-	}
-    return $statestr
-}
-
 function GetDatabaseDimensionInfo {
     param (
         [Parameter(Mandatory = $true)] $dbdim
     )	
     $attrs = GetDatabaseDimensionAttributes -dbdim $dbdim
-	$keyattr = GetDimensionAttributeInfo -attr $dbdim.KeyAttribute
-	$state = AnalysisStateToString -state $dbdim.State
+    $keyattr = GetDimensionAttributeInfo -attr $dbdim.KeyAttribute
     $dbdimInfo = @{
         ID            = $dbdim.ID
         Name          = $dbdim.Name
         FriendlyName  = $dbdim.FriendlyName
         LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $dbdim.LastProcessed
-        State         = $state
+        State         = [string]$dbdim.State
         KeyAttribute  = $keyattr
         Attributes    = $attrs
     }
@@ -116,27 +80,209 @@ function GetCubeDimensionInfo {
     )	
     $attrs = GetCubeAttributes -cubedim $cubedim
     $cubedimInfo = @{
-        ID            = $cubedim.ID
-        Name          = $cubedim.Name
-        FriendlyName  = $cubedim.FriendlyName
-        Attributes    = $attrs
+        ID           = $cubedim.ID
+        Name         = $cubedim.Name
+        FriendlyName = $cubedim.FriendlyName
+        Attributes   = $attrs
     }
     return $cubedimInfo
 }
 
+function GetCubeDimensions {
+    param (
+        [Parameter(Mandatory = $true)] $cube
+    )		
+    $dims = @()
+    foreach ($dim in $cube.Dimensions) {
+        $dimInfo = GetCubeDimensionInfo -cubedim $dim
+        $dims += $dimInfo
+    }
+    return $dims
+}
+function GetMeasureGroupInfo {
+    param (
+        [Parameter(Mandatory = $true)] $mgroup
+    )	
+    $measures = GetMeasures -mgroup $mgroup	
+    $partitions = GetPartitions -mgroup $mgroup
+    $mgInfo = @{
+        ID              = $mgroup.ID
+        Name            = $mgroup.Name
+        FriendlyName    = $mgroup.FriendlyName
+        LastProcessed   = '{0:yyyy-MM-dd hh:mm}' -f $mgroup.LastProcessed
+        State           = [string]$mgroup.State
+        EstimatedRows   = ("{0:n0}" -f $mgroup.EstimatedRows)
+        EstimatedSizeMB = ("{0:n2}" -f ($mgroup.EstimatedSize / 1024 / 1024))
+        Measures        = $measures
+        Partitions      = $partitions
+    }
+    return $mgInfo
+}
+function GetMeasureGroups {
+    param (
+        [Parameter(Mandatory = $true)] $cube
+    )		
+    $mgroups = @()
+    foreach ($mgroup in $cube.MeasureGroups) {
+        $mgInfo = GetMeasureGroupInfo -mgroup $mgroup
+        $mgroups += $mgInfo
+    }
+    return $mgroups
+}
+
+function GetMeasureInfo {
+    param (
+        [Parameter(Mandatory = $true)] $measure
+    )		
+    $measureInfo = @{
+        ID                = $measure.ID
+        Name              = $measure.Name
+        FriendlyName      = $measure.FriendlyName
+        AggregateFunction = [string]$measure.AggregateFunction
+        DataType          = [string]$measure.DataType
+        DisplayFolder     = $measure.DisplayFolder
+        FormatString      = $measure.FormatString
+        Visible           = $measure.Visible
+        FriendlyPath      = $measure.FriendlyPath
+        SourceColumnID    = $measure.Source.ColumnID
+        SourceTableID     = $measure.Source.TableID
+        DataSize          = $measure.Source.DataSize
+    }
+    return $measureInfo
+}
+function GetMeasures {
+    param (
+        [Parameter(Mandatory = $true)] $mgroup
+    )		
+    $measures = @()
+    foreach ($measure in $mgroup.Measures) {
+        $measureInfo = GetMeasureInfo -measure $measure
+        $measures += $measureInfo
+    }
+    return $measures
+}
+
+function GetPartitionInfo {
+    param (
+        [Parameter(Mandatory = $true)] $part
+    )		
+    [Microsoft.AnalysisServices.TabularBinding]$bin = $part.Source
+
+    if ($bin -is [Microsoft.AnalysisServices.QueryBinding]) {
+        $binding = "QueryBinding"
+        $qb = [Microsoft.AnalysisServices.QueryBinding]$bin
+        $dsID = $qb.DataSourceID
+        $qdef = $qb.QueryDefinition
+    }
+    elseif ($bin -is [Microsoft.AnalysisServices.TableBinding]) {
+        $binding = "TableBinding"
+        $tb = [Microsoft.AnalysisServices.TableBinding]$bin
+        $dsID = $tb.DataSourceID
+        $schema = $tb.DbSchemaName
+        $table = $tb.DbTableName
+    }
+    elseif ($bin -is [Microsoft.AnalysisServices.DsvTableBinding]) {
+        $binding = "DsvTableBinding"
+        $dsvb = [Microsoft.AnalysisServices.DsvTableBinding]$bin
+        $dsvID = $dsvb.DataSourceViewID
+        $tableID = $dsvb.TableID
+    }
+    else {
+        $binding = "Unknown"
+    }
+    $partInfo = @{
+        ID               = $part.ID
+        Name             = $part.Name
+        FriendlyName     = $part.FriendlyName
+        Slice            = $part.Slice
+        Binding          = $binding
+        DataSourceID     = $dsID
+        QueryDefinition  = $qdef
+        DbSchemaName     = $schema
+        DbTableName      = $table
+        DataSourceViewID = $dsvID
+        TableID          = $tableID
+        LastProcessed    = '{0:yyyy-MM-dd hh:mm}' -f $part.LastProcessed
+        State            = [string]$part.State
+        EstimatedRows    = ("{0:n0}" -f $part.EstimatedRows)
+        EstimatedSizeMB  = ("{0:n2}" -f ($part.EstimatedSize / 1024 / 1024))
+    }
+    return $partInfo
+}
+function GetPartitions {
+    param (
+        [Parameter(Mandatory = $true)] $mgroup
+    )		
+    $partitions = @()
+    foreach ($part in $mgroup.Partitions) {
+        $partInfo = GetPartitionInfo -part $part
+        $partitions += $partInfo
+    }
+    return $partitions
+}
+
+function GetCubeInfo {
+    param (
+        [Parameter(Mandatory = $true)] $cube
+    )		
+    $dims = GetCubeDimensions -cube $cube
+    $mgroups = GetMeasureGroups -cube $cube
+    $cubeInfo = @{
+        ID             = $cube.ID
+        Name           = $cube.Name
+        FriendlyName   = $cube.FriendlyName
+        LastProcessed  = '{0:yyyy-MM-dd hh:mm}' -f $cube.LastProcessed
+        State          = [string]$cube.State
+        DefaultMeasure = $cube.DefaultMeasure
+        CubeDimensions = $dims
+        MeasureGroups  = $mgroups
+    }
+    return $cubeInfo
+}
+function GetCubes {
+    param (
+        [Parameter(Mandatory = $true)] $database
+    )		
+    $cubes = @()
+    foreach ($cube in $database.Cubes) {
+        $cubeInfo = GetCubeInfo -cube $cube
+        $cubes += $cubeInfo
+    }
+    return $cubes
+}
+function GetDatabaseInfo {
+    param (
+        [Parameter(Mandatory = $true)] $database
+    )		
+    $dsvInfo = GetDsvInfo -database $database
+    $dsInfo = GetDataSourceInfo -database $database
+    $cubes = GetCubes -database $database
+    $dbInfo = @{
+        ID              = $database.ID
+        Name            = $database.Name
+        FriendlyName    = $database.FriendlyName
+        LastProcessed   = '{0:yyyy-MM-dd hh:mm}' -f $database.LastProcessed
+        State           = [string]$database.State
+        EstimatedSizeMB = ("{0:n2}" -f ($database.EstimatedSize / 1024 / 1024))
+        Cubes           = $cubes
+        DataSources     = $dsInfo
+        DataSourceViews = $dsvInfo
+    }
+    return $dbInfo
+}
 
 function GetCubeAttributeInfo {
     param (
         [Parameter(Mandatory = $true)] $attr
     )	
-	$dimattr = GetDimensionAttributeInfo -attr $attr.Attribute
+    $dimattr = GetDimensionAttributeInfo -attr $attr.Attribute
     $attrInfo = @{
         AttributeHierarchyVisible = $attr.AttributeHierarchyVisible
         AttributeHierarchyEnabled = $attr.AttributeHierarchyEnabled
         FriendlyName              = $attr.FriendlyName
         DimensionAttribute        = $dimattr
     }
-	return $attrInfo
+    return $attrInfo
 }
 
 function GetCubeAttributes {
@@ -150,14 +296,6 @@ function GetCubeAttributes {
     }
     return $attributes
 }
-#$attrInfo = GetCubeAttributeInfo -attr $cubedim.Attributes[0]
-#$dimattr = GetDimensionAttributeInfo -attr $cubedim.Attributes[0].Attribute
-#$attrs = GetDimensionAttributes -dbdim $dbdim
-
-#$diminfo = GetDatabaseDimensionInfo -dbdim $dbdim
-$diminfo = GetCubeDimensionInfo -cubedim $cubedim
-
-write-host($diminfo | ConvertTo-Json -Depth 10)
 
 function GetTableProperty {
     param (
@@ -204,7 +342,6 @@ function GetSchemaInfo {
     foreach ($dt in $dsv.Schema.Tables) {
         $tabInfo = GetTableInfo -table $dt
         $schemaInfo += $tabInfo
-        #write-host($tabInfo | ConvertTo-Json -Compress)
     }
     return $schemaInfo
 }
@@ -215,7 +352,6 @@ function GetDsvInfo {
     )		
     $dsvInfo = @()
     foreach ($dsv in $database.DataSourceViews) {
-        #$dsv = $db.DataSourceViews[0]
         $schemaInfo = GetSchemaInfo -dsv $dsv
         $dsvInfo += @{
             ID           = $dsv.ID
@@ -226,10 +362,6 @@ function GetDsvInfo {
     }
     return $dsvInfo
 }
-
-$dsvInfo = GetDsvInfo -database $db
-#write-host($dsvInfo | ConvertTo-Json)
-
 
 function GetDataSourceInfo {
     param (
@@ -246,21 +378,9 @@ function GetDataSourceInfo {
     return $dsInfo
 }
 
-$dsInfo = GetDataSourceInfo -database $db
-#write-host($dsInfo | ConvertTo-Json)
 
-#if ($islog -eq $null) {$islog = "N/A"}
-#write-host("[IsLogical]=[{0}]" -f $islog)
+$dbInfo = GetDatabaseInfo -database $db
+$text = $dbInfo | ConvertTo-Json -Depth 20
+set-content -Path $outfile -Value $text -Force
 
-<#
-	if ($tb -is [Microsoft.AnalysisServices.QueryBinding]) {
-		write-host("QueryBinding")
-	}
-	elseif ($tb -is [Microsoft.AnalysisServices.TableBinding]) {
-		write-host("TableBinding")
-	}
-	elseif ($tb -is [Microsoft.AnalysisServices.DsvTableBinding]) {
-		write-host("DsvTableBinding")
-	}
-#>
 write-host("::: Done.")
