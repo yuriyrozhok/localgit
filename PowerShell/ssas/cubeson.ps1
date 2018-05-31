@@ -1,8 +1,21 @@
 # ---------------------------------------------------------------------------------------
-# Script name:		dimsrc.ps1
+# Script name:		cubeson.ps1
 # Created:			2018-05-29
 # Author:			YRO016
-# Description:		Reads the source views/tables/columns for the cube dimensions.
+# Description:		Reads the metadata for SSAS cube objects and generates JSON document.
+# Parameters:		
+#					server:
+#						Desc: 		SSAS server instance
+#						Values:		any text
+#					database:
+#						Desc: 		SSAS database name
+#						Values:		any text
+#					outfile:
+#						Desc: 		output file name
+#						Values:		proper file path
+# Usage example:
+#					document the Pulse database:
+# 						.\cubeson.ps1 -server SCRBMSBDK000660 -database FBR_Pulse_SE_DTST18 -outfile C:\FBR\doc\FBR_Pulse_SE_DTST18.json
 # ---------------------------------------------------------------------------------------
 param (
     [string]$server = "SCRBMSBDK000660",
