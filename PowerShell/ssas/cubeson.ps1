@@ -3,45 +3,50 @@
 # Created:			2018-05-29
 # Author:			YRO016
 # Description:		Reads the metadata for SSAS cube objects and generates JSON document.
-# Parameters:		
+# Parameters:
 #					server:
 #						Desc: 		SSAS server instance
 #						Values:		any text
 #					database:
 #						Desc: 		SSAS database name
 #						Values:		any text
+# Output:
 #					outfile:
 #						Desc: 		output file name
 #						Values:		proper file path
 # Usage example:
 #					document the Pulse database:
-# 						.\cubeson.ps1 -server SCRBMSBDK000660 -database FBR_Pulse_SE_DTST18 -outfile C:\FBR\doc\FBR_Pulse_SE_DTST18.json
+# 						.\cubeson.ps1 -server SCRBMSBDK000660 -database FBR_Pulse_SE_DTST18
 # ---------------------------------------------------------------------------------------
+# PS classes: https://xainey.github.io/2016/powershell-classes-and-concepts/#class-structure
 param (
     [string]$server = "SCRBMSBDK000660",
-    [string]$database = "FBR_FYPnL_DPRD",
-    [string]$outfile = ".\result.json"
+    [string]$database = "FBR_Pulse_SE_DTST18" #"FBR_FYPnL_DPRD"
 )
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null;
+
+$Host.PrivateData.ProgressBackgroundColor = 'Green'
+$Host.PrivateData.ProgressForegroundColor = 'White'
 
 $srv = New-Object Microsoft.AnalysisServices.Server
 write-host ("::: connecting to SSAS instance: {0} ..." -f $server)
 $srv.connect($server)
+write-host ("::: connected.")
 $db = $srv.Databases.FindByName($database)
 write-host("::: database: [{0}]" -f $db.Name)
 
 function GetDimensionAttributeInfo {
     param (
         [Parameter(Mandatory = $true)] $attr
-    )	
-    [Microsoft.AnalysisServices.ColumnBinding]$ncb = $attr.NameColumn.Source;	
+    )
+    [Microsoft.AnalysisServices.ColumnBinding]$ncb = $attr.NameColumn.Source;
     $keys = @()
     foreach ($keycol in $attr.KeyColumns) {
         $kcb = $keycol.Source
         $keys += @{
             KeyColumnID      = $kcb.ColumnID
             KeyColumnTableID = $kcb.TableID
-        }	
+        }
     }
     $attrInfo = @{
         ID                        = $attr.ID
@@ -60,7 +65,7 @@ function GetDimensionAttributeInfo {
 function GetDatabaseDimensionAttributes {
     param (
         [Parameter(Mandatory = $true)] $dbdim
-    )		
+    )
     $attributes = @()
     foreach ($attr in $dbdim.Attributes) {
         $attrInfo = GetDimensionAttributeInfo -attr $attr
@@ -72,7 +77,7 @@ function GetDatabaseDimensionAttributes {
 function GetDatabaseDimensionInfo {
     param (
         [Parameter(Mandatory = $true)] $dbdim
-    )	
+    )
     $attrs = GetDatabaseDimensionAttributes -dbdim $dbdim
     $keyattr = GetDimensionAttributeInfo -attr $dbdim.KeyAttribute
     $dbdimInfo = @{
@@ -90,13 +95,15 @@ function GetDatabaseDimensionInfo {
 function GetCubeDimensionInfo {
     param (
         [Parameter(Mandatory = $true)] $cubedim
-    )	
+    )
     $attrs = GetCubeAttributes -cubedim $cubedim
+    $dbdim = GetDatabaseDimensionInfo -dbdim $cubedim.Dimension
     $cubedimInfo = @{
-        ID           = $cubedim.ID
-        Name         = $cubedim.Name
-        FriendlyName = $cubedim.FriendlyName
-        Attributes   = $attrs
+        ID                = $cubedim.ID
+        Name              = $cubedim.Name
+        FriendlyName      = $cubedim.FriendlyName
+        DatabaseDimension = $dbdim
+        Attributes        = $attrs
     }
     return $cubedimInfo
 }
@@ -104,19 +111,23 @@ function GetCubeDimensionInfo {
 function GetCubeDimensions {
     param (
         [Parameter(Mandatory = $true)] $cube
-    )		
+    )
+    write-host ("::: collecting dimensions of cube [{0}]..." -f $cube.Name)
+    $cnt, $idx = $cube.Dimensions.Count, 0
     $dims = @()
     foreach ($dim in $cube.Dimensions) {
         $dimInfo = GetCubeDimensionInfo -cubedim $dim
         $dims += $dimInfo
+        write-progress -activity ("Collecting dimensions of cube [{0}]..." -f $cube.Name) `
+            -status "Progress:" -percentcomplete (++$idx / $cnt * 100)
     }
     return $dims
 }
 function GetMeasureGroupInfo {
     param (
         [Parameter(Mandatory = $true)] $mgroup
-    )	
-    $measures = GetMeasures -mgroup $mgroup	
+    )
+    $measures = GetMeasures -mgroup $mgroup
     $partitions = GetPartitions -mgroup $mgroup
     $mgInfo = @{
         ID              = $mgroup.ID
@@ -134,11 +145,15 @@ function GetMeasureGroupInfo {
 function GetMeasureGroups {
     param (
         [Parameter(Mandatory = $true)] $cube
-    )		
+    )
+    write-host ("::: collecting measure groups of cube [{0}]..." -f $cube.Name)
+    $cnt, $idx = $cube.MeasureGroups.Count, 0
     $mgroups = @()
     foreach ($mgroup in $cube.MeasureGroups) {
         $mgInfo = GetMeasureGroupInfo -mgroup $mgroup
         $mgroups += $mgInfo
+        write-progress -activity ("Collecting measure groups of cube [{0}]..." -f $cube.Name) `
+            -status "Progress:" -percentcomplete (++$idx / $cnt * 100)
     }
     return $mgroups
 }
@@ -146,7 +161,7 @@ function GetMeasureGroups {
 function GetMeasureInfo {
     param (
         [Parameter(Mandatory = $true)] $measure
-    )		
+    )
     $measureInfo = @{
         ID                = $measure.ID
         Name              = $measure.Name
@@ -166,7 +181,7 @@ function GetMeasureInfo {
 function GetMeasures {
     param (
         [Parameter(Mandatory = $true)] $mgroup
-    )		
+    )
     $measures = @()
     foreach ($measure in $mgroup.Measures) {
         $measureInfo = GetMeasureInfo -measure $measure
@@ -178,7 +193,7 @@ function GetMeasures {
 function GetPartitionInfo {
     param (
         [Parameter(Mandatory = $true)] $part
-    )		
+    )
     [Microsoft.AnalysisServices.TabularBinding]$bin = $part.Source
 
     if ($bin -is [Microsoft.AnalysisServices.QueryBinding]) {
@@ -225,7 +240,7 @@ function GetPartitionInfo {
 function GetPartitions {
     param (
         [Parameter(Mandatory = $true)] $mgroup
-    )		
+    )
     $partitions = @()
     foreach ($part in $mgroup.Partitions) {
         $partInfo = GetPartitionInfo -part $part
@@ -237,7 +252,7 @@ function GetPartitions {
 function GetCubeInfo {
     param (
         [Parameter(Mandatory = $true)] $cube
-    )		
+    )
     $dims = GetCubeDimensions -cube $cube
     $mgroups = GetMeasureGroups -cube $cube
     $cubeInfo = @{
@@ -255,9 +270,10 @@ function GetCubeInfo {
 function GetCubes {
     param (
         [Parameter(Mandatory = $true)] $database
-    )		
+    )
     $cubes = @()
     foreach ($cube in $database.Cubes) {
+        write-host ("::: collecting metadata from cube {0}..." -f $cube.Name)
         $cubeInfo = GetCubeInfo -cube $cube
         $cubes += $cubeInfo
     }
@@ -266,7 +282,7 @@ function GetCubes {
 function GetDatabaseInfo {
     param (
         [Parameter(Mandatory = $true)] $database
-    )		
+    )
     $dsvInfo = GetDsvInfo -database $database
     $dsInfo = GetDataSourceInfo -database $database
     $cubes = GetCubes -database $database
@@ -287,7 +303,7 @@ function GetDatabaseInfo {
 function GetCubeAttributeInfo {
     param (
         [Parameter(Mandatory = $true)] $attr
-    )	
+    )
     $dimattr = GetDimensionAttributeInfo -attr $attr.Attribute
     $attrInfo = @{
         AttributeHierarchyVisible = $attr.AttributeHierarchyVisible
@@ -301,7 +317,7 @@ function GetCubeAttributeInfo {
 function GetCubeAttributes {
     param (
         [Parameter(Mandatory = $true)] $cubedim
-    )		
+    )
     $attributes = @()
     foreach ($attr in $cubedim.Attributes) {
         $attrInfo = GetCubeAttributeInfo -attr $attr
@@ -314,13 +330,13 @@ function GetTableProperty {
     param (
         [Parameter(Mandatory = $true)] $table
         , [Parameter(Mandatory = $true)] [string]$propertyName
-    )		
+    )
     return $table.ExtendedProperties[$propertyName]
 }
 function FindTableByID {
     param (
         [Parameter(Mandatory = $true)] [string]$tableID
-    )		
+    )
     [System.Data.DataTable]$dt = $schema.Tables[$tableID]
     return $dt
 }
@@ -345,16 +361,20 @@ function GetTableInfo {
 		$extval = $dt.ExtendedProperties[$extkey]
 		write-host("[{0}]=[{1}]" -f $extkey, $extval)
 	}
-#>	
+#>
 
 function GetSchemaInfo {
     param (
         [Parameter(Mandatory = $true)] $dsv
-    )		
+    )
+    write-host ("::: collecting DSV schema of [{0}]..." -f $dsv.Name)
+    $cnt, $idx = $dsv.Schema.Tables.Count, 0
     $schemaInfo = @()
     foreach ($dt in $dsv.Schema.Tables) {
         $tabInfo = GetTableInfo -table $dt
         $schemaInfo += $tabInfo
+        write-progress -activity ("Collecting schema of DSV [{0}]" -f $dsv.Name) `
+            -status "Progress:" -percentcomplete (++$idx / $cnt * 100)
     }
     return $schemaInfo
 }
@@ -362,7 +382,7 @@ function GetSchemaInfo {
 function GetDsvInfo {
     param (
         [Parameter(Mandatory = $true)] $database
-    )		
+    )
     $dsvInfo = @()
     foreach ($dsv in $database.DataSourceViews) {
         $schemaInfo = GetSchemaInfo -dsv $dsv
@@ -379,7 +399,7 @@ function GetDsvInfo {
 function GetDataSourceInfo {
     param (
         [Parameter(Mandatory = $true)] $database
-    )		
+    )
     $dsInfo = @()
     foreach ($ds in $database.DataSources) {
         $dsInfo += @{
@@ -391,9 +411,230 @@ function GetDataSourceInfo {
     return $dsInfo
 }
 
+function GetTableList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $tabList = @()
+    foreach ($dsv in $dbinfo.DataSourceViews) {
+        #write-host($cube.Name)
+        foreach ($tab in $dsv.Schema) {
+            #write-host($dim.Name)
+            $tabList += @{
+                DsvID                = $dsv.ID
+                DsvName              = $dsv.Name
+                DsvDataSourceID      = $dsv.DataSourceID
+                TableID              = $tab.ID
+                TableIsLogical       = $tab.IsLogical
+                TableFriendlyName    = $tab.FriendlyName
+                TableTableType       = $tab.TableType
+                TableDbTableName     = $tab.DbTableName
+                TableDbSchemaName    = $tab.DbSchemaName
+                TableQueryDefinition = $tab.QueryDefinition
+
+            }
+        }
+    }
+    return $tabList
+}
+
+function GetCubeList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        $list += @{
+            CubeID             = $cube.ID
+            CubeName           = $cube.Name
+            CubeFriendlyName   = $cube.FriendlyName
+            CubeLastProcessed  = $cube.LastProcessed
+            CubeState          = $cube.State
+            CubeDefaultMeasure = $cube.DefaultMeasure
+        }
+    }
+    return $list
+}
+
+function GetDimensionList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        foreach ($dim in $cube.CubeDimensions) {
+            $list += @{
+                CubeID                         = $cube.ID
+                CubeDimensionID                = $dim.ID
+                CubeDimensionName              = $dim.Name
+                CubeDimensionFriendlyName      = $dim.FriendlyName
+                DatabaseDimensionID            = $dim.DatabaseDimension.ID
+                DatabaseDimensionName          = $dim.DatabaseDimension.Name
+                DatabaseDimensionFriendlyName  = $dim.DatabaseDimension.FriendlyName
+                DatabaseDimensionLastProcessed = $dim.DatabaseDimension.LastProcessed
+                DatabaseDimensionState         = $dim.DatabaseDimension.State
+                DatabaseDimensionKeyAttribute  = $dim.DatabaseDimension.KeyAttribute.ID              
+            }
+        }
+    }
+    return $list
+}
+
+function GetAttributeList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        foreach ($dim in $cube.CubeDimensions) {
+            foreach ($attr in $dim.Attributes) {
+                $list += @{
+                    CubeID                        = $cube.ID
+                    CubeDimensionID               = $dim.ID
+                    CubeAttributeHierarchyVisible = $attr.AttributeHierarchyVisible
+                    CubeAttributeHierarchyEnabled = $attr.AttributeHierarchyEnabled
+                    CubeAttributeFriendlyName     = $attr.FriendlyName
+                    DimAttributeID                = $attr.DimensionAttribute.ID
+                    DimAttributeName              = $attr.DimensionAttribute.Name
+                    DimAttributeIsAggregatable    = $attr.DimensionAttribute.IsAggregatable
+                    DimAttributeHierarchyVisible  = $attr.DimensionAttribute.AttributeHierarchyVisible
+                    DimAttributeHierarchyEnabled  = $attr.DimensionAttribute.AttributeHierarchyEnabled
+                    DimAttributeFriendlyName      = $attr.DimensionAttribute.FriendlyName
+                    DimAttributeDefaultMember     = $attr.DimensionAttribute.DefaultMember
+                    DimAttributeNameColumnID      = $attr.DimensionAttribute.NameColumnID
+                    DimAttributeNameColumnTableID = $attr.DimensionAttribute.NameColumnTableID
+                <#
+                    Key columns:
+                    KeyColumnID
+                    KeyColumnTableID
+                #>
+
+                }
+            }
+        }
+    }
+    return $list
+}
+
+
+function GetMeasureGroupList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        foreach ($mg in $cube.MeasureGroups) {
+            $list += @{
+                CubeID                      = $cube.ID
+                MeasureGroupID              = $mg.ID
+                MeasureGroupEstimatedSizeMB = $mg.EstimatedSizeMB
+                MeasureGroupEstimatedRows   = $mg.EstimatedRows
+                MeasureGroupState           = $mg.State
+                MeasureGroupName            = $mg.Name
+                MeasureGroupLastProcessed   = $mg.LastProcessed
+                MeasureGroupFriendlyName    = $mg.FriendlyName
+            }
+        }
+    }
+    return $list
+}
+
+function GetPartitionList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        foreach ($mg in $cube.MeasureGroups) {
+            foreach ($part in $mg.Partitions) {
+                $list += @{
+                    CubeID                    = $cube.ID
+                    MeasureGroupID            = $mg.ID
+                    PartitionID               = $part.ID
+                    PartitionName             = $part.Name
+                    PartitionFriendlyName     = $part.FriendlyName
+                    PartitionSlice            = $part.Slice
+                    PartitionBinding          = $part.Binding
+                    PartitionDataSourceID     = $part.DataSourceID
+                    PartitionQueryDefinition  = $part.QueryDefinition
+                    PartitionDbSchemaName     = $part.DbSchemaName
+                    PartitionDbTableName      = $part.DbTableName
+                    PartitionDataSourceViewID = $part.DataSourceViewID
+                    PartitionTableID          = $part.TableID
+                    PartitionLastProcessed    = $part.LastProcessed
+                    PartitionState            = $part.State
+                    PartitionEstimatedRows    = $part.EstimatedRows
+                    PartitionEstimatedSizeMB  = $part.EstimatedSizeMB
+
+                }
+            }
+        }
+    }
+    return $list
+}
+
+function GetMeasureList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        foreach ($mg in $cube.MeasureGroups) {
+            foreach ($msr in $mg.Measures) {
+                $list += @{
+                    CubeID                   = $cube.ID
+                    MeasureGroupID           = $mg.ID
+                    MeasureID                = $msr.ID
+                    MeasureName              = $msr.Name
+                    MeasureFriendlyName      = $msr.FriendlyName
+                    MeasureAggregateFunction = $msr.AggregateFunction
+                    MeasureDataType          = $msr.DataType
+                    MeasureDisplayFolder     = $msr.DisplayFolder
+                    MeasureFormatString      = $msr.FormatString
+                    MeasureVisible           = $msr.Visible
+                    MeasureFriendlyPath      = $msr.FriendlyPath
+                    MeasureSourceColumnID    = $msr.SourceColumnID
+                    MeasureSourceTableID     = $msr.SourceTableID
+                    MeasureDataSize          = $msr.DataSize
+                }
+            }
+        }
+    }
+    return $list
+}
+function GetDatabaseFlat {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $tablist = GetTableList -dbinfo $dbInfo
+    $cubelist = GetCubeList -dbinfo $dbInfo
+    $dimlist = GetDimensionList -dbinfo $dbInfo
+    $attrlist = GetAttributeList -dbinfo $dbInfo
+    $mglist = GetMeasureGroupList -dbinfo $dbInfo
+    $partlist = GetPartitionList -dbinfo $dbInfo
+    $msrlist = GetMeasureList -dbinfo $dbInfo
+    $dbFlat = @{
+        DataSources   = $dbinfo.DataSources
+        Tables        = $tablist
+        Cubes         = $cubelist
+        Attributes    = $attrlist
+        Dimensions    = $dimlist
+        MeasureGroups = $mglist
+        Partitions    = $partlist
+        Measures      = $msrlist
+    }
+    return $dbFlat
+}
+[string]$treefile = (".\output\{0}.tree.json" -f $database)
+[string]$flatfile = (".\output\{0}.flat.json" -f $database)
 
 $dbInfo = GetDatabaseInfo -database $db
-$text = $dbInfo | ConvertTo-Json -Depth 20
-set-content -Path $outfile -Value $text -Force
+
+write-host ("::: generating outputs...")
+$treejson = $dbInfo | ConvertTo-Json -Depth 20
+set-content -Path $treefile -Value $treejson -Force
+
+$flatjson = GetDatabaseFlat -dbinfo $dbInfo | ConvertTo-Json -Depth 20
+set-content -Path $flatfile -Value $flatjson -Force
 
 write-host("::: Done.")
