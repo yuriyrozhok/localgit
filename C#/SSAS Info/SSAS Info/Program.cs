@@ -65,7 +65,6 @@ namespace Maersk.SSAS.Management
                         }
                     }
                     //MeasureGroupAttribute mgattr = rmgd.Attributes.f["Key"];
-
                 }
                 Type t = alist[0].KeyColumns[0].Source.GetType();
 
