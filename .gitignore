@@ -3,3 +3,8 @@ PowerShell/ssas/output
 CS/SSAS Info/.vs
 CS/SSAS Info/SSAS Info/bin
 CS/SSAS Info/SSAS Info/obj
+CS/dbDoc/.vs
+CS/dbDoc/bin
+CS/dbDoc/obj
+CS/dbDoc/packages
+
