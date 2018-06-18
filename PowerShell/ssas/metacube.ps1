@@ -484,7 +484,7 @@ function GetAttributeList {
     foreach ($cube in $dbinfo.Cubes) {
         foreach ($dim in $cube.CubeDimensions) {
             foreach ($attr in $dim.Attributes) {
-                $list += @{
+                $map = @{
                     CubeID                        = $cube.ID
                     CubeDimensionID               = $dim.ID
                     CubeAttributeHierarchyVisible = $attr.AttributeHierarchyVisible
@@ -499,13 +499,14 @@ function GetAttributeList {
                     DimAttributeDefaultMember     = $attr.DimensionAttribute.DefaultMember
                     DimAttributeNameColumnID      = $attr.DimensionAttribute.NameColumnID
                     DimAttributeNameColumnTableID = $attr.DimensionAttribute.NameColumnTableID
-                <#
-                    Key columns:
-                    KeyColumnID
-                    KeyColumnTableID
-                #>
-
                 }
+                $kid = 1
+                foreach ($key in $attr.DimensionAttribute.KeyColumns) {
+                    $map.Add(("KeyColumnID{0}" -f $kid), $key.KeyColumnID)
+                    $map.Add(("KeyColumnTableID{0}" -f $kid), $key.KeyColumnTableID)
+                    $kid++
+                }
+                $list += $map
             }
         }
     }
