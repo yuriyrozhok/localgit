@@ -4,20 +4,26 @@
 # Author:        YRO016
 # Description:   Reads the metadata for SSAS cube objects and generates JSON document.
 # Parameters:
-#                -server:    SSAS server instance
-#                -database:  SSAS database name
+#                -server      : SSAS server instance
+#                -database    : SSAS database name
+#                -skipdynamic : once provided, no dynamic data is collected (Processing, State, etc.)
 # Output:
 #                /output:    this folder should exist, here two files are created:
 #                  <database>.amo.json - generates full AMO hierarchy of cube objects
 #                  <database>.rdb.json - generates relational structure with foreighn keys
+# Notes:
+#                skipdynamic parameter is useful for comparison purposes (test vs. prod, etc.)
 # Usage example:
 #                document the Pulse database:
 #                  .\metacube.ps1 -server SCRBMSBDK000660 -database FBR_Pulse_SE_DTST18
+#                document the FY PnL database:
+#                  .\metacube.ps1 -server SCRBMSBDK000660 -database FBR_FYPnL -skipdynamic
 # ---------------------------------------------------------------------------------------
 # PS classes: https://xainey.github.io/2016/powershell-classes-and-concepts/#class-structure
 param (
     [string]$server = "SCRBMSBDK000660",
-    [string]$database = "FBR_Pulse_SE_DTST18"
+    [string]$database = "FBR_Pulse_SE_DTST18",
+    [switch]$skipdynamic
 )
 [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.AnalysisServices") | Out-Null;
 
@@ -77,13 +83,15 @@ function GetDatabaseDimensionInfo {
     $attrs = GetDatabaseDimensionAttributes -dbdim $dbdim
     $keyattr = GetDimensionAttributeInfo -attr $dbdim.KeyAttribute
     $dbdimInfo = @{
-        ID            = $dbdim.ID
-        Name          = $dbdim.Name
-        FriendlyName  = $dbdim.FriendlyName
-        LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $dbdim.LastProcessed
-        State         = [string]$dbdim.State
-        KeyAttribute  = $keyattr
-        Attributes    = $attrs
+        ID           = $dbdim.ID
+        Name         = $dbdim.Name
+        FriendlyName = $dbdim.FriendlyName
+        KeyAttribute = $keyattr
+        Attributes   = $attrs
+    }
+    if (!$skipdynamic) {
+        $dbdimInfo.LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $dbdim.LastProcessed
+        $dbdimInfo.State = [string]$dbdim.State
     }
     return $dbdimInfo
 }
@@ -126,15 +134,17 @@ function GetMeasureGroupInfo {
     $measures = GetMeasures -mgroup $mgroup
     $partitions = GetPartitions -mgroup $mgroup
     $mgInfo = @{
-        ID              = $mgroup.ID
-        Name            = $mgroup.Name
-        FriendlyName    = $mgroup.FriendlyName
-        LastProcessed   = '{0:yyyy-MM-dd hh:mm}' -f $mgroup.LastProcessed
-        State           = [string]$mgroup.State
-        EstimatedRows   = ("{0:n0}" -f $mgroup.EstimatedRows)
-        EstimatedSizeMB = ("{0:n2}" -f ($mgroup.EstimatedSize / 1024 / 1024))
-        Measures        = $measures
-        Partitions      = $partitions
+        ID           = $mgroup.ID
+        Name         = $mgroup.Name
+        FriendlyName = $mgroup.FriendlyName
+        Measures     = $measures
+        Partitions   = $partitions
+    }
+    if (!$skipdynamic) {
+        $mgInfo.EstimatedRows = ("{0:n0}" -f $mgroup.EstimatedRows)
+        $mgInfo.EstimatedSizeMB = ("{0:n2}" -f ($mgroup.EstimatedSize / 1024 / 1024))
+        $mgInfo.LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $mgroup.LastProcessed
+        $mgInfo.State = [string]$mgroup.State
     }
     return $mgInfo
 }
@@ -226,10 +236,12 @@ function GetPartitionInfo {
         DbTableName      = $table
         DataSourceViewID = $dsvID
         TableID          = $tableID
-        LastProcessed    = '{0:yyyy-MM-dd hh:mm}' -f $part.LastProcessed
-        State            = [string]$part.State
-        EstimatedRows    = ("{0:n0}" -f $part.EstimatedRows)
-        EstimatedSizeMB  = ("{0:n2}" -f ($part.EstimatedSize / 1024 / 1024))
+    }
+    if (!$skipdynamic) {
+        $partInfo.EstimatedRows = ("{0:n0}" -f $part.EstimatedRows)
+        $partInfo.EstimatedSizeMB = ("{0:n2}" -f ($part.EstimatedSize / 1024 / 1024))
+        $partInfo.LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $part.LastProcessed
+        $partInfo.State = [string]$part.State
     }
     return $partInfo
 }
@@ -255,11 +267,13 @@ function GetCubeInfo {
         ID             = $cube.ID
         Name           = $cube.Name
         FriendlyName   = $cube.FriendlyName
-        LastProcessed  = '{0:yyyy-MM-dd hh:mm}' -f $cube.LastProcessed
-        State          = [string]$cube.State
         DefaultMeasure = $cube.DefaultMeasure
         CubeDimensions = $dims
         MeasureGroups  = $mgroups
+    }
+    if (!$skipdynamic) {
+        $cubeInfo.LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $cube.LastProcessed
+        $cubeInfo.State = [string]$cube.State
     }
     return $cubeInfo
 }
@@ -286,12 +300,14 @@ function GetDatabaseInfo {
         ID              = $database.ID
         Name            = $database.Name
         FriendlyName    = $database.FriendlyName
-        LastProcessed   = '{0:yyyy-MM-dd hh:mm}' -f $database.LastProcessed
-        State           = [string]$database.State
-        EstimatedSizeMB = ("{0:n2}" -f ($database.EstimatedSize / 1024 / 1024))
         Cubes           = $cubes
         DataSources     = $dsInfo
         DataSourceViews = $dsvInfo
+    }
+    if (!$skipdynamic) {
+        $dbInfo.LastProcessed = '{0:yyyy-MM-dd hh:mm}' -f $database.LastProcessed
+        $dbInfo.State = [string]$database.State
+        $dbInfo.EstimatedSizeMB = ("{0:n2}" -f ($database.EstimatedSize / 1024 / 1024))
     }
     return $dbInfo
 }
@@ -352,12 +368,6 @@ function GetTableInfo {
         QueryDefinition = GetTableProperty -table $table -propertyName "QueryDefinition"
     }
 }
-<#	this way we could generate table info dynamically:
-	foreach ($extkey in $dt.ExtendedProperties.Keys) {
-		$extval = $dt.ExtendedProperties[$extkey]
-		write-host("[{0}]=[{1}]" -f $extkey, $extval)
-	}
-#>
 
 function GetSchemaInfo {
     param (
@@ -413,9 +423,7 @@ function GetTableList {
     )
     $tabList = @()
     foreach ($dsv in $dbinfo.DataSourceViews) {
-        #write-host($cube.Name)
         foreach ($tab in $dsv.Schema) {
-            #write-host($dim.Name)
             $tabList += @{
                 DsvID                = $dsv.ID
                 DsvName              = $dsv.Name
@@ -440,14 +448,17 @@ function GetCubeList {
     )
     $list = @()
     foreach ($cube in $dbinfo.Cubes) {
-        $list += @{
+        $map = @{
             CubeID             = $cube.ID
             CubeName           = $cube.Name
             CubeFriendlyName   = $cube.FriendlyName
-            CubeLastProcessed  = $cube.LastProcessed
-            CubeState          = $cube.State
             CubeDefaultMeasure = $cube.DefaultMeasure
         }
+        if (!$skipdynamic) {
+            $map.CubeLastProcessed = $cube.LastProcessed
+            $map.CubeState = $cube.State
+        }
+        $list += $map
     }
     return $list
 }
@@ -459,18 +470,21 @@ function GetDimensionList {
     $list = @()
     foreach ($cube in $dbinfo.Cubes) {
         foreach ($dim in $cube.CubeDimensions) {
-            $list += @{
-                CubeID                         = $cube.ID
-                CubeDimensionID                = $dim.ID
-                CubeDimensionName              = $dim.Name
-                CubeDimensionFriendlyName      = $dim.FriendlyName
-                DatabaseDimensionID            = $dim.DatabaseDimension.ID
-                DatabaseDimensionName          = $dim.DatabaseDimension.Name
-                DatabaseDimensionFriendlyName  = $dim.DatabaseDimension.FriendlyName
-                DatabaseDimensionLastProcessed = $dim.DatabaseDimension.LastProcessed
-                DatabaseDimensionState         = $dim.DatabaseDimension.State
-                DatabaseDimensionKeyAttribute  = $dim.DatabaseDimension.KeyAttribute.ID              
+            $map = @{
+                CubeID                        = $cube.ID
+                CubeDimensionID               = $dim.ID
+                CubeDimensionName             = $dim.Name
+                CubeDimensionFriendlyName     = $dim.FriendlyName
+                DatabaseDimensionID           = $dim.DatabaseDimension.ID
+                DatabaseDimensionName         = $dim.DatabaseDimension.Name
+                DatabaseDimensionFriendlyName = $dim.DatabaseDimension.FriendlyName
+                DatabaseDimensionKeyAttribute = $dim.DatabaseDimension.KeyAttribute.ID              
             }
+            if (!$skipdynamic) {
+                $map.DatabaseDimensionLastProcessed = $dim.DatabaseDimension.LastProcessed
+                $map.DatabaseDimensionState = $dim.DatabaseDimension.State
+            }
+            $list += $map
         }
     }
     return $list
@@ -521,16 +535,19 @@ function GetMeasureGroupList {
     $list = @()
     foreach ($cube in $dbinfo.Cubes) {
         foreach ($mg in $cube.MeasureGroups) {
-            $list += @{
-                CubeID                      = $cube.ID
-                MeasureGroupID              = $mg.ID
-                MeasureGroupEstimatedSizeMB = $mg.EstimatedSizeMB
-                MeasureGroupEstimatedRows   = $mg.EstimatedRows
-                MeasureGroupState           = $mg.State
-                MeasureGroupName            = $mg.Name
-                MeasureGroupLastProcessed   = $mg.LastProcessed
-                MeasureGroupFriendlyName    = $mg.FriendlyName
+            $map = @{
+                CubeID                   = $cube.ID
+                MeasureGroupID           = $mg.ID
+                MeasureGroupName         = $mg.Name
+                MeasureGroupFriendlyName = $mg.FriendlyName
             }
+            if (!$skipdynamic) {
+                $map.MeasureGroupEstimatedSizeMB = $mg.EstimatedSizeMB
+                $map.MeasureGroupEstimatedRows = $mg.EstimatedRows
+                $map.MeasureGroupLastProcessed = $mg.LastProcessed
+                $map.MeasureGroupState = $mg.State
+            }
+            $list += $map
         }
     }
     return $list
@@ -544,7 +561,7 @@ function GetPartitionList {
     foreach ($cube in $dbinfo.Cubes) {
         foreach ($mg in $cube.MeasureGroups) {
             foreach ($part in $mg.Partitions) {
-                $list += @{
+                $map = @{
                     CubeID                    = $cube.ID
                     MeasureGroupID            = $mg.ID
                     PartitionID               = $part.ID
@@ -558,12 +575,14 @@ function GetPartitionList {
                     PartitionDbTableName      = $part.DbTableName
                     PartitionDataSourceViewID = $part.DataSourceViewID
                     PartitionTableID          = $part.TableID
-                    PartitionLastProcessed    = $part.LastProcessed
-                    PartitionState            = $part.State
-                    PartitionEstimatedRows    = $part.EstimatedRows
-                    PartitionEstimatedSizeMB  = $part.EstimatedSizeMB
-
                 }
+                if (!$skipdynamic) {
+                    $map.PartitionEstimatedRows = $part.EstimatedRows
+                    $map.PartitionEstimatedSizeMB = $part.EstimatedSizeMB
+                    $map.PartitionLastProcessed = $part.LastProcessed
+                    $map.PartitionState = $part.State
+                }
+                $list += $map
             }
         }
     }
@@ -597,6 +616,51 @@ function GetMeasureList {
             }
         }
     }
+    return $list
+}
+
+function GetBusMatrixList {
+    param (
+        [Parameter(Mandatory = $true)] $dbinfo
+    )
+    $list = @()
+    foreach ($cube in $dbinfo.Cubes) {
+        foreach ($mg in $cube.MeasureGroups) {
+            
+        }
+    }
+    <#
+                MeasureGroup mg = cube.MeasureGroups.FindByName(mg_name);
+                //MeasureGroupDimension mgd = mg.Dimensions[0];
+                MeasureGroupDimension mgd = mg.Dimensions.Find("Order Date Key - Dim Time");
+                List<MeasureGroupAttribute> alist = new List<MeasureGroupAttribute>();
+
+                if (mgd is RegularMeasureGroupDimension) {
+                    RegularMeasureGroupDimension rmgd = (RegularMeasureGroupDimension) mgd;
+                    foreach (MeasureGroupAttribute mgattr in rmgd.Attributes)
+                    {
+                        if (mgattr.Type == MeasureGroupAttributeType.Granularity)
+                        {
+                            alist.Add(mgattr);
+                        }
+                    }
+                    //MeasureGroupAttribute mgattr = rmgd.Attributes.f["Key"];
+                }
+
+                //MeasureGroupAttribute.Attribute.KeyColumns means dimension binding
+                DimensionAttribute da = alist[0].Attribute;
+                ColumnBinding dcb = (ColumnBinding)da.KeyColumns[0].Source;
+                //dcb.ColumnID, dcb.TableID - dimension columns
+
+                //Type t = alist[0].KeyColumns[0].Source.GetType();
+                //MeasureGroupAttribute.KeyColumns means measure group binding
+                DataItem kc = alist[0].KeyColumns[0]; 
+                ColumnBinding mgcb = (ColumnBinding) alist[0].KeyColumns[0].Source;
+
+                //mgcb.ColumnID, mgcb.TableID - fact table columns
+    
+    #>
+
     return $list
 }
 function GetDatabaseFlat {
